@@ -1,6 +1,9 @@
 package geecache
 
-import "container/list"
+import (
+	"container/list"
+	"fmt"
+)
 
 // 使用LRU算法实现队列中最近使用最少的节点的淘汰
 type Cache struct {
@@ -60,6 +63,7 @@ func (c *Cache) RemoveOldest() {
 			c.OnEvicted(kv.key, kv.value)
 		}
 	}
+	fmt.Println(c.ll.Len())
 }
 
 func (c *Cache) Add(key string, value Value) {
@@ -75,14 +79,14 @@ func (c *Cache) Add(key string, value Value) {
 			key:   key,
 			value: value,
 		}
-		listEle := c.ll.PushBack(ele)
+		listEle := c.ll.PushFront(ele)
 		c.allocate(ele)
 		c.cache[ele.key] = listEle
 
 	}
-	if c.nBytes > c.maxBytes {
-		c.RemoveOldest()
 
+	for c.maxBytes != 0 && c.nBytes > c.maxBytes {
+		c.RemoveOldest()
 	}
 }
 
