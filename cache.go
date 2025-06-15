@@ -12,7 +12,7 @@ type Cache struct {
 }
 
 type Value interface {
-	Len() int64
+	Len() int
 }
 
 type Entry struct {
@@ -20,7 +20,7 @@ type Entry struct {
 	value Value
 }
 
-func NewCache(maxBytes int64, OnEvicted func(key string, value Value)) *Cache {
+func New(maxBytes int64, OnEvicted func(key string, value Value)) *Cache {
 	return &Cache{
 		maxBytes:  maxBytes,
 		ll:        list.New(),
@@ -78,12 +78,12 @@ func (c *Cache) Add(key string, value Value) {
 		listEle := c.ll.PushBack(ele)
 		c.allocate(ele)
 		c.cache[ele.key] = listEle
-		if c.nBytes > c.maxBytes {
-			c.RemoveOldest()
 
-		}
 	}
+	if c.nBytes > c.maxBytes {
+		c.RemoveOldest()
 
+	}
 }
 
 func (c *Cache) Len() int {
