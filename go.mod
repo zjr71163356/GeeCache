@@ -1,3 +1,3 @@
-module geecache
+module GeeCache
 
 go 1.24.2
