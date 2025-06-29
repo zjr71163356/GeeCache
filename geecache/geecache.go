@@ -159,6 +159,12 @@ func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
 	return ByteView{b: cloneBytes(bytes)}, err
 
 }
+func (g *Group) RegisterPeers(peers PeerPicker) {
+	if g.peers != nil {
+		panic("RegisterPeerPicker called more than once")
+	}
+	g.peers = peers
+}
 
 // getLocally 调用用户提供的 getter 来获取源数据，并将其添加到缓存中。
 //
