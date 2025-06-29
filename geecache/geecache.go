@@ -38,6 +38,7 @@ type Group struct {
 	name      string
 	maincache cache
 	getter    Getter
+	peers     PeerPicker
 }
 
 var (
@@ -136,7 +137,27 @@ func (g *Group) Get(key string) (value ByteView, err error) {
 //	value: 加载到的值。
 //	err: 如果加载过程中发生错误，则返回错误信息。
 func (g *Group) load(key string) (value ByteView, err error) {
+	if g.peers != nil {
+		if peerGetter, ok := g.peers.PickPeer(key); ok {
+			if v, err := g.getFromPeer(peerGetter, key); err == nil {
+				return v, nil
+
+			}
+			log.Println("[GeeCache] Failed to get from peer", err)
+		}
+		log.Println("[GeeCache] Failed to get from peer, will try locally")
+	}
+
 	return g.getLocally(key)
+}
+
+func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
+	bytes, err := peer.Get(g.name, key)
+	if err != nil {
+		return ByteView{}, err
+	}
+	return ByteView{b: cloneBytes(bytes)}, err
+
 }
 
 // getLocally 调用用户提供的 getter 来获取源数据，并将其添加到缓存中。
