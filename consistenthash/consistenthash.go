@@ -1,6 +1,7 @@
 package consistenthash
 
 import (
+	"fmt"
 	"hash/crc32"
 	"sort"
 	"strconv"
@@ -58,6 +59,6 @@ func (m *Map) Get(key string) string {
 	idx := sort.Search(len(m.keys), func(i int) bool {
 		return m.keys[i] >= hash
 	})
-
+	fmt.Println("hashmap:", m.hashMap[m.keys[idx%len(m.keys)]])
 	return m.hashMap[m.keys[idx%len(m.keys)]]
 }

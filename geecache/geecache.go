@@ -1,6 +1,7 @@
 package geecache
 
 import (
+	"GeeCache/singleflight"
 	"log"
 	"sync"
 )
@@ -39,6 +40,9 @@ type Group struct {
 	maincache cache
 	getter    Getter
 	peers     PeerPicker
+	// use singleflight.Group to make sure that
+	// each key is only fetched once
+	loader *singleflight.Group
 }
 
 var (
@@ -75,6 +79,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		maincache: cache{
 			cacheBytes: cacheBytes,
 		},
+		loader: &singleflight.Group{},
 	}
 
 	groups[name] = newGroup
@@ -137,18 +142,25 @@ func (g *Group) Get(key string) (value ByteView, err error) {
 //	value: 加载到的值。
 //	err: 如果加载过程中发生错误，则返回错误信息。
 func (g *Group) load(key string) (value ByteView, err error) {
-	if g.peers != nil {
-		if peerGetter, ok := g.peers.PickPeer(key); ok {
-			if v, err := g.getFromPeer(peerGetter, key); err == nil {
-				return v, nil
+	v, err := g.loader.Do(key, func() (any, error) {
+		if g.peers != nil {
+			if peerGetter, ok := g.peers.PickPeer(key); ok {
+				if v, err := g.getFromPeer(peerGetter, key); err == nil {
+					return v, nil
 
+				}
+				log.Println("[GeeCache] Failed to get from peer", err)
 			}
-			log.Println("[GeeCache] Failed to get from peer", err)
+			log.Println("[GeeCache] Failed to get from peer, will try locally")
 		}
-		log.Println("[GeeCache] Failed to get from peer, will try locally")
+		return g.getLocally(key)
+	})
+
+	if err == nil {
+		return v.(ByteView), nil
 	}
 
-	return g.getLocally(key)
+	return
 }
 
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
