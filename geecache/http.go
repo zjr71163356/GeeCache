@@ -2,6 +2,7 @@ package geecache
 
 import (
 	"GeeCache/consistenthash"
+	pb "GeeCache/geecachepb"
 	"fmt"
 	"io"
 	"log"
@@ -9,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -30,28 +33,29 @@ type httpGetter struct {
 	baseURL string
 }
 
-func (h *httpGetter) Get(group string, key string) ([]byte, error) {
+func (h *httpGetter) Get(in *pb.Request, out *pb.Response) error {
 
 	newUrl := fmt.Sprintf("%v%v/%v", h.baseURL,
-		url.QueryEscape(group), url.QueryEscape(key),
+		url.QueryEscape(in.GetGroup()), url.QueryEscape(in.GetKey()),
 	)
 
 	rsp, err := http.Get(newUrl)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rsp.Body.Close()
 
 	if rsp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned:%v", rsp.StatusCode)
+		return fmt.Errorf("server returned:%v", rsp.StatusCode)
 	}
 
 	bytes, err := io.ReadAll(rsp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response body:%v", err)
+
+	if err = proto.Unmarshal(bytes, out); err != nil {
+		return fmt.Errorf("reading response body:%v", err)
 	}
 
-	return bytes, nil
+	return nil
 }
 
 // NewHTTPPool 创建一个新的 HTTPPool 实例。
@@ -133,6 +137,40 @@ func (h *HTTPPool) Log(format string, a ...any) {
 //
 //	w: 用于写入 HTTP 响应的 http.ResponseWriter。
 //	r: 代表客户端发来的 HTTP 请求的 *http.Request。
+// func (h *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+// 	if !strings.HasPrefix(r.URL.Path, h.basePath) {
+// 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
+// 	}
+// 	h.Log("%s %s", r.Method, r.URL.Path)
+// 	// 期望的请求路径格式为 /<basepath>/<groupname>/<key>
+// 	// 使用 SplitN 将路径切分为两部分
+// 	parts := strings.SplitN(r.URL.Path[len(h.basePath):], "/", 2)
+// 	if len(parts) != 2 {
+// 		http.Error(w, "bad request", http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	groupName := parts[0]
+// 	key := parts[1]
+
+// 	group := GetGroup(groupName)
+// 	if group == nil {
+// 		http.Error(w, "no such group: "+groupName, http.StatusNotFound)
+// 		return
+// 	}
+
+// 	view, err := group.Get(key)
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	// 将获取到的缓存值作为二进制流写入响应体
+// 	w.Header().Set("Content-Type", "application/octet-stream")
+// 	w.Write(view.ByteSlice())
+// }
+
 func (h *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if !strings.HasPrefix(r.URL.Path, h.basePath) {
@@ -162,7 +200,13 @@ func (h *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body, err := proto.Marshal(&pb.Response{Value: view.ByteSlice()})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// 将获取到的缓存值作为二进制流写入响应体
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(view.ByteSlice())
+	w.Write(body)
 }
